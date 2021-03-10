@@ -5,6 +5,7 @@ module OAuth2
   # The OAuth2::Client class
   class Client # rubocop:disable Metrics/ClassLength
     RESERVED_PARAM_KEYS = ['headers', 'parse'].freeze
+    RESPONSE_TOKEN_KEYS = ['access_token', 'id_token'].freeze
 
     attr_reader :id, :secret, :site
     attr_accessor :options
@@ -159,13 +160,21 @@ module OAuth2
       opts[:headers].merge!(headers)
       http_method = options[:token_method]
       http_method = :post if http_method == :post_with_query_string
+
       response = request(http_method, token_url, opts)
-      response_contains_token = response.parsed.is_a?(Hash) &&
-                                (response.parsed['access_token'] || response.parsed['id_token'])
+      response_contains_token = response.parsed.is_a?(Hash) && RESPONSE_TOKEN_KEYS.any? do |key|
+        response.parsed[key]
+      end
 
       if options[:raise_errors] && !response_contains_token
         error = Error.new(response)
-        raise(error)
+        if response.parsed['error']
+          raise(error)
+        else
+          # when no error code is present in the response, but it's missing a token
+          # raise an error with the expected token names
+          raise(error, "Missing one of the following tokens: #{RESPONSE_TOKEN_KEYS.join(', ')}")
+        end
       elsif !response_contains_token
         return nil
       end

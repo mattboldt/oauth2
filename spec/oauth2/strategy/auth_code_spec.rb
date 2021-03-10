@@ -112,6 +112,32 @@ RSpec.describe OAuth2::Strategy::AuthCode do
     end
   end
 
+  describe '#get_token (with variable response tokens)' do
+    before do
+      @mode = 'json'
+      client.options[:token_method] = :get
+      client.options[:auth_scheme] = :request_body
+    end
+
+    OAuth2::Client::RESPONSE_TOKEN_KEYS.each do |token_key|
+      describe "#{token_key} present" do
+        let(:json_token) { MultiJson.encode(:expires_in => 600, token_key => 'salmon', :refresh_token => 'trout', :extra_param => 'steve') }
+
+        it 'does not raise an error' do
+          expect { subject.get_token(code) }.not_to raise_error
+        end
+      end
+    end
+
+    describe 'missing response token' do
+      let(:json_token) { MultiJson.encode(:expires_in => 600, :refresh_token => 'trout', :extra_param => 'steve') }
+
+      it 'raises an error for missing token' do
+        expect { subject.get_token(code) }.to raise_error(OAuth2::Error, /Missing one of the following tokens/)
+      end
+    end
+  end
+
   %w[json formencoded from_facebook].each do |mode|
     [:get, :post].each do |verb|
       describe "#get_token (#{mode}, access_token_method=#{verb}" do
